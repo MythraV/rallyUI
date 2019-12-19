@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 ###################################################
 # Authors: Mythra Varun 
-# This script reads and writes to the serial port. The read data is published to a topic named "ser_read". The data to be written is read from the "ser_wrt" topic. 
+# This script reads and writes to the serial port.
+# The read data is imu inputs from is published to a topic named "ser_read". The data to be written is read from the "ser_wrt" topic. 
 ###################################################
 
 import rospy
 from std_msgs.msg import String
 
 # imports for laser scan data
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import Imu
 
 # imports for reading map
 from nav_msgs.msg import OccupancyGrid,MapMetaData
@@ -39,24 +40,32 @@ class serialport_rw:
         self.wrtflag = False
         
         #Serial loop rate
-        self.ser_rate = 300
+        self.ser_rate = 500
         self.serflag = False
-        
+        # Data descriptors
+        self.word_len = 39 # Ex: I1+00021+00025+16482+02002U 
+        rospy.init_node('serial_rw',anonymous = True) 
+        self.acc_scl = 9.8/16384
+        self.avel_scl = 4.36332/32768
+    #    rospy.on_shutdown(self.shtdwn)       
         
 # The callback function to write data to serial port
     def wrt_cb(self,data):
         self.wrtflag = True
         self.wrt_buf = data.data
+    
         #rospy.loginfo(self.wrt_buf)
 # The main serial function    
     def ser_rw(self):
         # initializations
-        rospy.init_node('serial_rw',anonymous = True)
-        pub1 = rospy.Publisher('imu1_dat', String, queue_size = 100)
-        pub2 = rospy.Publisher('imu2_dat', String, queue_size = 100)
-        pub3 = rospy.Publisher('imu3_dat', String, queue_size = 100)
+
+        pub1 = rospy.Publisher('imu/data_raw1', Imu, queue_size = 100)
+        pub2 = rospy.Publisher('imu/data_raw2', Imu, queue_size = 100)
+        pub3 = rospy.Publisher('imu/data_raw3', Imu, queue_size = 100)
         rospy.Subscriber("ser_wrt", String, self.wrt_cb)
         rt = rospy.Rate(self.ser_rate)
+        # imu message 
+        imu_msg = Imu()
         # Port setup
         try:
             ser = serial.Serial(self.port_name,self.baud,timeout=0.01)
@@ -76,7 +85,7 @@ class serialport_rw:
         # Flush the serial port once in the beginning
             ser.read(ser.inWaiting())
             rospy.loginfo('Serial port flushed')
-            rospy.loginfo(ser.write('IMU1'))    
+            rospy.loginfo(ser.write('IMU3'))    
        
         # Loop begin 
             while not rospy.is_shutdown():
@@ -87,18 +96,36 @@ class serialport_rw:
             #Check if there is data to be read, if so write
                 if ser.inWaiting(): 
                     self.read_buf = self.read_buf + ser.read(ser.inWaiting());
-                    if len(self.read_buf) >= 21:
+                    #print('read')
+                    if len(self.read_buf) >= self.word_len:
                         beg = self.read_buf.find('I')
+                        #print(len(self.read_buf))
                         self.read_buf = self.read_buf[beg:]
-                        if (len(self.read_buf)>=21 and self.read_buf[20] == 'U'):
+                        #print(len(self.read_buf))
+                        #print('word_len received')
+                        #print(self.read_buf)
+                        ti=rospy.get_time()
+                        if (len(self.read_buf)>=self.word_len and self.read_buf[self.word_len-1] == 'U'):
+                            imu_msg.angular_velocity.x = int(self.read_buf[20:26])*self.avel_scl
+                            imu_msg.angular_velocity.y = int(self.read_buf[26:32])*self.avel_scl
+                            imu_msg.angular_velocity.z = int(self.read_buf[32:38])*self.avel_scl
+                            imu_msg.linear_acceleration.x = int(self.read_buf[2:8])*self.acc_scl
+                            imu_msg.linear_acceleration.y = int(self.read_buf[8:14])*self.acc_scl
+                            imu_msg.linear_acceleration.z = int(self.read_buf[14:20])*self.acc_scl
+                            
+                            #print('pub')
                             if(self.read_buf[1]=='0'):
-                                pub1.publish(self.read_buf[0:20]);
+                                pub1.publish(imu_msg)
                             elif(self.read_buf[1]=='1'):
-                                pub2.publish(self.read_buf[0:20]);
+                                pub2.publish(imu_msg)
                             elif(self.read_buf[1]=='2'):
-                                pub3.publish(self.read_buf[0:20]);
-                            self.read_buf=''
-                rt.sleep();  
+                                pub3.publish(imu_msg)
+                            self.read_buf=self.read_buf[self.word_len:]
+                            #print(rospy.get_time()-ti)
+                            #print(len(self.read_buf))
+
+                rt.sleep();
+            ser.write('IMU0')
     
 if __name__ == '__main__':
     try:

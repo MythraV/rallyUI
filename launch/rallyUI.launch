@@ -5,7 +5,7 @@
 	</node>    
 
 <!-- Load a Map  -->
-	<arg name="map_file" default="/home/nvidia/wsps/ui_ws/src/wall_follower/resources/map/knoy1219.yaml"/>
+	<arg name="map_file" default="/home/nvidia/wsps/ui_ws/src/wall_follower/resources/map/potr_full.yaml"/>
 	<node name="map_server" pkg="map_server" type="map_server" args="$(arg map_file)" />
 
 	<!-- static transform -->
@@ -57,7 +57,7 @@
 	<node pkg="wall_follower" type="waypoint.py" output="screen" name="waypoint" />	
 
 <!-- python script: Serial read write to arduino -->
-	<node pkg="wall_follower" type="serial_rw_trim.py" output="screen" name="serial_ard" />		
+<!--	<node pkg="wall_follower" type="serial_rw_trim.py" output="screen" name="serial_ard" />	-->	
 	
 <!-- Visualisation RVIZ -->
 	<node pkg="rviz" type="rviz" name="rviz" args="-d /home/nvidia/wsps/ui_ws/src/wall_follower/resources/rally_ui.rviz"/>
